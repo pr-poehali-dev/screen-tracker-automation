@@ -1,0 +1,1389 @@
+<Window x:Class="MacroFlow.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MacroFlow"
+        Title="MacroFlow"
+        Width="1100" Height="720"
+        MinWidth="860" MinHeight="560"
+        Background="{StaticResource BackgroundBrush}"
+        WindowStartupLocation="CenterScreen"
+        Foreground="{StaticResource TextBrush}">
+
+    <Window.Resources>
+        <!-- Sidebar macro item template -->
+        <DataTemplate x:Key="MacroItemTemplate">
+            <Border Padding="10,8" Margin="0,1"
+                    x:Name="itemBorder"
+                    Background="Transparent"
+                    CornerRadius="6"
+                    Cursor="Hand">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="statusText"
+                                   FontSize="11"
+                                   Margin="0,2,0,0" />
+                    </StackPanel>
+                    <!-- Toggle button -->
+                    <ToggleButton Grid.Column="1"
+                                  IsChecked="{Binding Enabled}"
+                                  Width="40" Height="22"
+                                  Cursor="Hand"
+                                  VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}" />
+                </Grid>
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                <Setter Property="Background" Value="#FF1A3A2A" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Enabled}" Value="True">
+                    <Setter TargetName="statusText" Property="Text" Value="Активен" />
+                    <Setter TargetName="statusText" Property="Foreground" Value="{StaticResource AccentBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Enabled}" Value="False">
+                    <Setter TargetName="statusText" Property="Text" Value="Отключён" />
+                    <Setter TargetName="statusText" Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Toggle Switch Style -->
+        <Style x:Key="ToggleSwitch" TargetType="ToggleButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="track"
+                                Width="40" Height="22"
+                                CornerRadius="11"
+                                Background="{StaticResource BorderBrush}">
+                            <Ellipse x:Name="thumb"
+                                     Width="16" Height="16"
+                                     Fill="White"
+                                     HorizontalAlignment="Left"
+                                     Margin="3,0,0,0" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="track" Property="Background" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="thumb" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="thumb" Property="Margin" Value="0,0,3,0" />
+                                <Setter TargetName="thumb" Property="Fill" Value="#FF1A1A1A" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Step list item template -->
+        <DataTemplate x:Key="StepItemTemplate">
+            <Border Padding="10,8" Margin="0,2"
+                    Background="{StaticResource SurfaceLightBrush}"
+                    CornerRadius="6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <!-- Step number badge -->
+                    <Border Grid.Column="0"
+                            Width="20" Height="20"
+                            Background="#FF3A3A3A"
+                            CornerRadius="10"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, 
+                                          Path=DataContext.(local:MacroStep.DisplayName), 
+                                          Converter={StaticResource IndexConverter}}"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   FontSize="10"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <!-- Step display name -->
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding DisplayName}"
+                               Foreground="{StaticResource TextBrush}"
+                               FontSize="13"
+                               VerticalAlignment="Center"
+                               Margin="8,0,0,0"
+                               TextTrimming="CharacterEllipsis" />
+                    <!-- Step type badge -->
+                    <Border Grid.Column="2"
+                            Padding="6,2"
+                            CornerRadius="3"
+                            VerticalAlignment="Center"
+                            x:Name="typeBadge">
+                        <TextBlock x:Name="typeText" FontSize="11" FontWeight="SemiBold" />
+                    </Border>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Type}" Value="KeyPress">
+                    <Setter TargetName="typeBadge" Property="Background" Value="#FF1A2A4A" />
+                    <Setter TargetName="typeText" Property="Text" Value="КЛАВИША" />
+                    <Setter TargetName="typeText" Property="Foreground" Value="#FF5599FF" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="Delay">
+                    <Setter TargetName="typeBadge" Property="Background" Value="#FF2A2A1A" />
+                    <Setter TargetName="typeText" Property="Text" Value="ПАУЗА" />
+                    <Setter TargetName="typeText" Property="Foreground" Value="#FFFFCC44" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="TypeText">
+                    <Setter TargetName="typeBadge" Property="Background" Value="#FF1A3A1A" />
+                    <Setter TargetName="typeText" Property="Text" Value="ТЕКСТ" />
+                    <Setter TargetName="typeText" Property="Foreground" Value="{StaticResource AccentBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="MouseClick">
+                    <Setter TargetName="typeBadge" Property="Background" Value="#FF2A1A3A" />
+                    <Setter TargetName="typeText" Property="Text" Value="КЛИК" />
+                    <Setter TargetName="typeText" Property="Foreground" Value="#FFBB66FF" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Type}" Value="MouseMove">
+                    <Setter TargetName="typeBadge" Property="Background" Value="#FF2A1A3A" />
+                    <Setter TargetName="typeText" Property="Text" Value="МЫШЬ" />
+                    <Setter TargetName="typeText" Property="Foreground" Value="#FFBB66FF" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Trigger list item template -->
+        <DataTemplate x:Key="TriggerItemTemplate">
+            <Border Padding="10,8" Margin="0,2"
+                    Background="{StaticResource SurfaceLightBrush}"
+                    CornerRadius="6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}" />
+                        <TextBlock FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="0,2,0,0">
+                            <Run Text="Область: " />
+                            <Run Text="{Binding Region.DisplayString}" />
+                            <Run Text="  |  Порог: " />
+                            <Run Text="{Binding Threshold, StringFormat={}{0:F1}%}" />
+                        </TextBlock>
+                    </StackPanel>
+                    <ToggleButton Grid.Column="1"
+                                  IsChecked="{Binding Enabled}"
+                                  Width="40" Height="22"
+                                  Cursor="Hand"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240" MinWidth="180" />
+            <ColumnDefinition Width="4" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SIDEBAR
+             ══════════════════════════════════════════════════════════════════ -->
+        <Border Grid.Column="0"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Logo / App name -->
+                <Border Grid.Row="0"
+                        Padding="16,16,16,12"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="32" Height="32"
+                                Background="{StaticResource AccentBrush}"
+                                CornerRadius="8"
+                                Margin="0,0,10,0">
+                            <TextBlock Text="M" FontSize="18" FontWeight="Black"
+                                       Foreground="#FF1A1A1A"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel>
+                            <TextBlock Text="MacroFlow"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource TextBrush}" />
+                            <TextBlock Text="Менеджер макросов"
+                                       FontSize="10"
+                                       Foreground="{StaticResource TextMutedBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Search / Add bar -->
+                <Border Grid.Row="1" Padding="12,10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="8" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBox Grid.Row="0"
+                                 x:Name="SearchBox"
+                                 Style="{StaticResource DarkTextBox}"
+                                 Text=""
+                                 TextChanged="SearchBox_TextChanged">
+                            <TextBox.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="5" />
+                                </Style>
+                            </TextBox.Resources>
+                        </TextBox>
+                        <!-- Placeholder for search -->
+                        <TextBlock Grid.Row="0"
+                                   Text="Поиск макросов..."
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   FontSize="13"
+                                   Margin="10,0,0,0"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   x:Name="SearchPlaceholder" />
+                        <Button Grid.Row="2"
+                                Content="+ Добавить макрос"
+                                Style="{StaticResource AccentButton}"
+                                Click="AddMacro_Click"
+                                HorizontalAlignment="Stretch" />
+                    </Grid>
+                </Border>
+
+                <!-- Macro list -->
+                <ListBox Grid.Row="2"
+                         x:Name="MacroListBox"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectionChanged="MacroListBox_SelectionChanged"
+                         ItemTemplate="{StaticResource MacroItemTemplate}"
+                         Padding="8,0"
+                         VirtualizingPanel.IsVirtualizing="False">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0,1" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="itemBg" Background="Transparent" CornerRadius="6">
+                                            <ContentPresenter />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="itemBg" Property="Background" Value="#FF1A3A2A" />
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="itemBg" Property="Background" Value="#FF252525" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+
+                <!-- Delete / Save buttons -->
+                <Border Grid.Row="3"
+                        Padding="12,10"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,1,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0"
+                                Content="Удалить"
+                                Style="{StaticResource DangerButton}"
+                                Click="DeleteMacro_Click"
+                                x:Name="DeleteMacroBtn" />
+                        <Button Grid.Column="2"
+                                Content="Сохранить"
+                                Style="{StaticResource AccentButton}"
+                                Click="SaveAll_Click" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Resize splitter -->
+        <GridSplitter Grid.Column="1"
+                      Width="4"
+                      HorizontalAlignment="Stretch"
+                      Background="{StaticResource BorderBrush}" />
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             MAIN CONTENT AREA
+             ══════════════════════════════════════════════════════════════════ -->
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ── Top bar ─────────────────────────────────────────────────── -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Macro name edit -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Макрос: "
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   FontSize="14"
+                                   VerticalAlignment="Center" />
+                        <TextBox x:Name="MacroNameBox"
+                                 Style="{StaticResource DarkTextBox}"
+                                 FontSize="16"
+                                 FontWeight="SemiBold"
+                                 MinWidth="200"
+                                 TextChanged="MacroNameBox_TextChanged"
+                                 VerticalAlignment="Center" />
+
+                        <Border Margin="16,0,0,0"
+                                Padding="8,4"
+                                CornerRadius="4"
+                                x:Name="HotkeyBadge"
+                                Background="#FF1A2A1A"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Горячая клавиша: "
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="12" />
+                                <TextBlock x:Name="HotkeyDisplay"
+                                           Text="Не задана"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Run / Stop buttons -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="RunOnceBtn"
+                                Content="▶ Запустить"
+                                Style="{StaticResource AccentButton}"
+                                Margin="0,0,8,0"
+                                Click="RunOnce_Click" />
+                        <Button x:Name="RunRepeatBtn"
+                                Content="⟳ С повтором"
+                                Style="{StaticResource GhostButton}"
+                                Margin="0,0,8,0"
+                                Click="RunRepeat_Click" />
+                        <Button x:Name="StopBtn"
+                                Content="■ Стоп"
+                                Style="{StaticResource DangerButton}"
+                                Visibility="Collapsed"
+                                Click="Stop_Click" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ── Tab content ─────────────────────────────────────────────── -->
+            <Grid Grid.Row="1" x:Name="ContentGrid">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Tab bar -->
+                <Border Grid.Row="0"
+                        Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="TabSteps"
+                                Content="Шаги"
+                                Click="Tab_Click"
+                                Tag="Steps"
+                                Style="{StaticResource TabButton}" />
+                        <Button x:Name="TabTriggers"
+                                Content="Триггеры"
+                                Click="Tab_Click"
+                                Tag="Triggers"
+                                Style="{StaticResource TabButton}" />
+                        <Button x:Name="TabRepeat"
+                                Content="Повтор"
+                                Click="Tab_Click"
+                                Tag="Repeat"
+                                Style="{StaticResource TabButton}" />
+                        <Button x:Name="TabHotkey"
+                                Content="Горячая клавиша"
+                                Click="Tab_Click"
+                                Tag="Hotkey"
+                                Style="{StaticResource TabButton}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Empty state -->
+                <Border Grid.Row="1"
+                        x:Name="EmptyState"
+                        Visibility="Visible">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="Выберите макрос"
+                                   FontSize="22"
+                                   FontWeight="Light"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="или создайте новый, нажав «+ Добавить макрос»"
+                                   FontSize="13"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- ── STEPS TAB ──────────────────────────────────────────── -->
+                <Grid Grid.Row="1" x:Name="StepsPanel" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="4" />
+                        <ColumnDefinition Width="320" MinWidth="260" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Steps list -->
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Padding="12,10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="СПИСОК ШАГОВ"
+                                           Style="{StaticResource SectionHeader}"
+                                           VerticalAlignment="Center"
+                                           Margin="0" />
+                                <TextBlock x:Name="StepCountLabel"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Margin="8,0,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="12,8">
+                            <ListBox x:Name="StepsListBox"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     SelectionChanged="StepsListBox_SelectionChanged"
+                                     ItemTemplate="{StaticResource StepItemTemplate}"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     VirtualizingPanel.IsVirtualizing="False">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <ContentPresenter />
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                            </ListBox>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                                  Background="{StaticResource BorderBrush}" />
+
+                    <!-- Step editor panel -->
+                    <Border Grid.Column="2"
+                            Background="{StaticResource SurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1,0,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Step editor header -->
+                            <Border Grid.Row="0" Padding="14,10"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="0,0,0,1">
+                                <TextBlock Text="РЕДАКТОР ШАГА"
+                                           Style="{StaticResource SectionHeader}"
+                                           Margin="0" />
+                            </Border>
+
+                            <!-- Step editor body -->
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="StepEditorPanel" Padding="14,12">
+
+                                    <!-- Step type selector -->
+                                    <TextBlock Text="Тип шага" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox x:Name="StepTypeCombo"
+                                              Style="{StaticResource DarkComboBox}"
+                                              SelectionChanged="StepTypeCombo_SelectionChanged"
+                                              Margin="0,0,0,14">
+                                        <ComboBoxItem Content="Нажатие клавиши" Tag="KeyPress" />
+                                        <ComboBoxItem Content="Задержка" Tag="Delay" />
+                                        <ComboBoxItem Content="Ввод текста" Tag="TypeText" />
+                                        <ComboBoxItem Content="Клик мышью" Tag="MouseClick" />
+                                        <ComboBoxItem Content="Движение мыши" Tag="MouseMove" />
+                                    </ComboBox>
+
+                                    <!-- ── KeyPress fields ── -->
+                                    <StackPanel x:Name="KeyPressFields" Visibility="Collapsed">
+                                        <TextBlock Text="Клавиша" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="KeyCodeBox"
+                                                 Style="{StaticResource DarkTextBox}"
+                                                 TextChanged="StepField_Changed"
+                                                 Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Модификаторы" Style="{StaticResource FieldLabel}" />
+                                        <WrapPanel Margin="0,0,0,10">
+                                            <CheckBox x:Name="KeyCtrlCheck" Content="Ctrl"
+                                                      Style="{StaticResource DarkCheckBox}"
+                                                      Checked="StepField_Changed" Unchecked="StepField_Changed"
+                                                      Margin="0,0,12,6" />
+                                            <CheckBox x:Name="KeyShiftCheck" Content="Shift"
+                                                      Style="{StaticResource DarkCheckBox}"
+                                                      Checked="StepField_Changed" Unchecked="StepField_Changed"
+                                                      Margin="0,0,12,6" />
+                                            <CheckBox x:Name="KeyAltCheck" Content="Alt"
+                                                      Style="{StaticResource DarkCheckBox}"
+                                                      Checked="StepField_Changed" Unchecked="StepField_Changed"
+                                                      Margin="0,0,12,6" />
+                                            <CheckBox x:Name="KeyWinCheck" Content="Win"
+                                                      Style="{StaticResource DarkCheckBox}"
+                                                      Checked="StepField_Changed" Unchecked="StepField_Changed"
+                                                      Margin="0,0,0,6" />
+                                        </WrapPanel>
+                                    </StackPanel>
+
+                                    <!-- ── Delay fields ── -->
+                                    <StackPanel x:Name="DelayFields" Visibility="Collapsed">
+                                        <TextBlock Text="Задержка (мс)" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="DelayBox"
+                                                 Style="{StaticResource DarkTextBox}"
+                                                 TextChanged="StepField_Changed"
+                                                 Margin="0,0,0,10" />
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="100" Tag="100"
+                                                    Style="{StaticResource GhostButton}"
+                                                    FontSize="12"
+                                                    Click="DelayPreset_Click" />
+                                            <Button Grid.Column="2" Content="500" Tag="500"
+                                                    Style="{StaticResource GhostButton}"
+                                                    FontSize="12"
+                                                    Click="DelayPreset_Click" />
+                                            <Button Grid.Column="4" Content="1000" Tag="1000"
+                                                    Style="{StaticResource GhostButton}"
+                                                    FontSize="12"
+                                                    Click="DelayPreset_Click" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- ── TypeText fields ── -->
+                                    <StackPanel x:Name="TypeTextFields" Visibility="Collapsed">
+                                        <TextBlock Text="Текст для ввода" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="TypeTextBox"
+                                                 Style="{StaticResource DarkTextBox}"
+                                                 TextWrapping="Wrap"
+                                                 AcceptsReturn="True"
+                                                 Height="120"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 TextChanged="StepField_Changed"
+                                                 Margin="0,0,0,10" />
+                                    </StackPanel>
+
+                                    <!-- ── MouseClick fields ── -->
+                                    <StackPanel x:Name="MouseClickFields" Visibility="Collapsed">
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="X" Style="{StaticResource FieldLabel}" />
+                                                <TextBox x:Name="ClickXBox"
+                                                         Style="{StaticResource DarkTextBox}"
+                                                         TextChanged="StepField_Changed" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Y" Style="{StaticResource FieldLabel}" />
+                                                <TextBox x:Name="ClickYBox"
+                                                         Style="{StaticResource DarkTextBox}"
+                                                         TextChanged="StepField_Changed" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Text="Кнопка мыши" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox x:Name="ClickButtonCombo"
+                                                  Style="{StaticResource DarkComboBox}"
+                                                  SelectionChanged="StepField_Changed"
+                                                  Margin="0,0,0,10">
+                                            <ComboBoxItem Content="Левая" Tag="Left" />
+                                            <ComboBoxItem Content="Правая" Tag="Right" />
+                                            <ComboBoxItem Content="Средняя" Tag="Middle" />
+                                        </ComboBox>
+                                        <Button Content="Указать на экране..."
+                                                Style="{StaticResource GhostButton}"
+                                                Click="PickMousePos_Click"
+                                                HorizontalAlignment="Stretch" />
+                                    </StackPanel>
+
+                                    <!-- ── MouseMove fields ── -->
+                                    <StackPanel x:Name="MouseMoveFields" Visibility="Collapsed">
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="X" Style="{StaticResource FieldLabel}" />
+                                                <TextBox x:Name="MoveXBox"
+                                                         Style="{StaticResource DarkTextBox}"
+                                                         TextChanged="StepField_Changed" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Y" Style="{StaticResource FieldLabel}" />
+                                                <TextBox x:Name="MoveYBox"
+                                                         Style="{StaticResource DarkTextBox}"
+                                                         TextChanged="StepField_Changed" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <Button Content="Указать на экране..."
+                                                Style="{StaticResource GhostButton}"
+                                                Click="PickMovePos_Click"
+                                                HorizontalAlignment="Stretch" />
+                                    </StackPanel>
+
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- Step action buttons -->
+                            <Border Grid.Row="2" Padding="14,10"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="0,1,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Content="▲ Вверх"
+                                            Style="{StaticResource GhostButton}"
+                                            Click="StepMoveUp_Click"
+                                            x:Name="StepUpBtn" />
+                                    <Button Grid.Column="2" Content="▼ Вниз"
+                                            Style="{StaticResource GhostButton}"
+                                            Click="StepMoveDown_Click"
+                                            x:Name="StepDownBtn" />
+                                    <Button Grid.Column="4" Content="Удалить"
+                                            Style="{StaticResource DangerButton}"
+                                            Click="DeleteStep_Click"
+                                            x:Name="DeleteStepBtn" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- ── TRIGGERS TAB ──────────────────────────────────────── -->
+                <Grid Grid.Row="1" x:Name="TriggersPanel" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="4" />
+                        <ColumnDefinition Width="340" MinWidth="280" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Triggers list -->
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Padding="12,10"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="0,0,0,1">
+                            <TextBlock Text="ВИЗУАЛЬНЫЕ ТРИГГЕРЫ"
+                                       Style="{StaticResource SectionHeader}"
+                                       Margin="0" />
+                        </Border>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="12,8">
+                            <ListBox x:Name="TriggersListBox"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     SelectionChanged="TriggersListBox_SelectionChanged"
+                                     ItemTemplate="{StaticResource TriggerItemTemplate}"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     VirtualizingPanel.IsVirtualizing="False">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <ContentPresenter />
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                            </ListBox>
+                        </ScrollViewer>
+
+                        <Border Grid.Row="2" Padding="12,10"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="0,1,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="+ Добавить триггер"
+                                        Style="{StaticResource AccentButton}"
+                                        Click="AddTrigger_Click"
+                                        Margin="0,0,8,0" />
+                                <Button Content="Удалить"
+                                        Style="{StaticResource DangerButton}"
+                                        Click="DeleteTrigger_Click"
+                                        x:Name="DeleteTriggerBtn" />
+                                <Button Content="▶ Мониторинг"
+                                        Style="{StaticResource GhostButton}"
+                                        Click="StartMonitor_Click"
+                                        x:Name="StartMonitorBtn"
+                                        Margin="8,0,0,0" />
+                                <Button Content="■ Стоп"
+                                        Style="{StaticResource DangerButton}"
+                                        Click="StopMonitor_Click"
+                                        x:Name="StopMonitorBtn"
+                                        Visibility="Collapsed"
+                                        Margin="8,0,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                                  Background="{StaticResource BorderBrush}" />
+
+                    <!-- Trigger editor -->
+                    <Border Grid.Column="2"
+                            Background="{StaticResource SurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1,0,0,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="TriggerEditorPanel" Padding="14,12">
+
+                                <TextBlock Text="РЕДАКТОР ТРИГГЕРА"
+                                           Style="{StaticResource SectionHeader}" />
+
+                                <TextBlock Text="Название" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="TriggerNameBox"
+                                         Style="{StaticResource DarkTextBox}"
+                                         TextChanged="TriggerField_Changed"
+                                         Margin="0,0,0,12" />
+
+                                <!-- Region -->
+                                <TextBlock Text="Область экрана" Style="{StaticResource FieldLabel}" />
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition />
+                                        <RowDefinition Height="6" />
+                                        <RowDefinition />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Column="0" Text="X" Style="{StaticResource FieldLabel}" HorizontalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="Y" Style="{StaticResource FieldLabel}" HorizontalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="W" Style="{StaticResource FieldLabel}" HorizontalAlignment="Center" />
+                                    <TextBlock Grid.Column="3" Text="H" Style="{StaticResource FieldLabel}" HorizontalAlignment="Center" />
+                                    <TextBox Grid.Row="2" Grid.Column="0" x:Name="TriggerRX" Style="{StaticResource DarkTextBox}" Margin="0,0,2,0" TextChanged="TriggerField_Changed" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="TriggerRY" Style="{StaticResource DarkTextBox}" Margin="2,0" TextChanged="TriggerField_Changed" />
+                                    <TextBox Grid.Row="2" Grid.Column="2" x:Name="TriggerRW" Style="{StaticResource DarkTextBox}" Margin="2,0" TextChanged="TriggerField_Changed" />
+                                    <TextBox Grid.Row="2" Grid.Column="3" x:Name="TriggerRH" Style="{StaticResource DarkTextBox}" Margin="2,0,0,0" TextChanged="TriggerField_Changed" />
+                                </Grid>
+                                <Button Content="Выбрать область на экране..."
+                                        Style="{StaticResource GhostButton}"
+                                        Click="SelectTriggerRegion_Click"
+                                        HorizontalAlignment="Stretch"
+                                        Margin="0,0,0,12" />
+
+                                <!-- Threshold -->
+                                <TextBlock Text="Порог изменения (%)" Style="{StaticResource FieldLabel}" />
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="60" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider x:Name="ThresholdSlider"
+                                            Grid.Column="0"
+                                            Style="{StaticResource DarkSlider}"
+                                            Minimum="0.1" Maximum="100"
+                                            Value="5"
+                                            TickFrequency="0.1"
+                                            ValueChanged="ThresholdSlider_ValueChanged"
+                                            VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="2"
+                                             x:Name="ThresholdBox"
+                                             Style="{StaticResource DarkTextBox}"
+                                             TextChanged="ThresholdBox_TextChanged" />
+                                </Grid>
+
+                                <!-- Check interval -->
+                                <TextBlock Text="Интервал проверки (мс)" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="TriggerIntervalBox"
+                                         Style="{StaticResource DarkTextBox}"
+                                         TextChanged="TriggerField_Changed"
+                                         Margin="0,0,0,12" />
+
+                                <!-- Action -->
+                                <TextBlock Text="Действие при срабатывании" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="TriggerActionCombo"
+                                          Style="{StaticResource DarkComboBox}"
+                                          SelectionChanged="TriggerActionCombo_SelectionChanged"
+                                          Margin="0,0,0,10">
+                                    <ComboBoxItem Content="Нажать клавишу" Tag="PressKey" />
+                                    <ComboBoxItem Content="Кликнуть мышью" Tag="ClickMouse" />
+                                </ComboBox>
+
+                                <StackPanel x:Name="TriggerKeyFields">
+                                    <TextBlock Text="Клавиша" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="TriggerKeyBox"
+                                             Style="{StaticResource DarkTextBox}"
+                                             TextChanged="TriggerField_Changed"
+                                             Margin="0,0,0,12" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="TriggerMouseFields" Visibility="Collapsed">
+                                    <TextBlock Text="Кнопка мыши" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox x:Name="TriggerMouseButtonCombo"
+                                              Style="{StaticResource DarkComboBox}"
+                                              SelectionChanged="TriggerField_Changed"
+                                              Margin="0,0,0,8">
+                                        <ComboBoxItem Content="Левая" Tag="Left" />
+                                        <ComboBoxItem Content="Правая" Tag="Right" />
+                                        <ComboBoxItem Content="Средняя" Tag="Middle" />
+                                    </ComboBox>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="X" Style="{StaticResource FieldLabel}" />
+                                            <TextBox x:Name="TriggerMouseX"
+                                                     Style="{StaticResource DarkTextBox}"
+                                                     TextChanged="TriggerField_Changed" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Y" Style="{StaticResource FieldLabel}" />
+                                            <TextBox x:Name="TriggerMouseY"
+                                                     Style="{StaticResource DarkTextBox}"
+                                                     TextChanged="TriggerField_Changed" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- ── REPEAT TAB ─────────────────────────────────────────── -->
+                <ScrollViewer Grid.Row="1" x:Name="RepeatPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Padding="24,20" MaxWidth="600" HorizontalAlignment="Left">
+
+                        <TextBlock Text="НАСТРОЙКИ ПОВТОРА"
+                                   Style="{StaticResource SectionHeader}" />
+
+                        <CheckBox x:Name="RepeatEnabledCheck"
+                                  Content="Включить повтор макроса"
+                                  Style="{StaticResource DarkCheckBox}"
+                                  Checked="RepeatField_Changed"
+                                  Unchecked="RepeatField_Changed"
+                                  Margin="0,0,0,20" />
+
+                        <Border Padding="0"
+                                x:Name="RepeatOptionsPanel">
+                            <StackPanel>
+                                <!-- Interval -->
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Интервал (мс)" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="RepeatIntervalBox"
+                                                 Style="{StaticResource DarkTextBox}"
+                                                 TextChanged="RepeatField_Changed" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Джиттер ± (мс)" Style="{StaticResource FieldLabel}" />
+                                        <TextBox x:Name="RepeatJitterBox"
+                                                 Style="{StaticResource DarkTextBox}"
+                                                 TextChanged="RepeatField_Changed" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Stop condition -->
+                                <TextBlock Text="Условие остановки" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="StopConditionCombo"
+                                          Style="{StaticResource DarkComboBox}"
+                                          SelectionChanged="StopConditionCombo_SelectionChanged"
+                                          Margin="0,0,0,12">
+                                    <ComboBoxItem Content="Без ограничений" Tag="None" />
+                                    <ComboBoxItem Content="По времени" Tag="ByTime" />
+                                    <ComboBoxItem Content="По количеству" Tag="ByCount" />
+                                </ComboBox>
+
+                                <StackPanel x:Name="StopTimePanel" Visibility="Collapsed" Margin="0,0,0,12">
+                                    <TextBlock Text="Остановить через (сек)" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="StopAfterSecondsBox"
+                                             Style="{StaticResource DarkTextBox}"
+                                             TextChanged="RepeatField_Changed" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="StopCountPanel" Visibility="Collapsed" Margin="0,0,0,12">
+                                    <TextBlock Text="Количество повторов" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="StopAfterCountBox"
+                                             Style="{StaticResource DarkTextBox}"
+                                             TextChanged="RepeatField_Changed" />
+                                </StackPanel>
+
+                                <!-- Info box -->
+                                <Border Background="#FF1A2A1A"
+                                        BorderBrush="{StaticResource AccentBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Padding="12,10"
+                                        Margin="0,8,0,0">
+                                    <TextBlock TextWrapping="Wrap"
+                                               FontSize="12"
+                                               Foreground="{StaticResource TextMutedBrush}">
+                                        <Run Text="Джиттер добавляет случайное отклонение к интервалу. Например, интервал " />
+                                        <Run Text="1000 мс" Foreground="{StaticResource AccentBrush}" />
+                                        <Run Text=" с джиттером " />
+                                        <Run Text="200 мс" Foreground="{StaticResource AccentBrush}" />
+                                        <Run Text=" даёт фактический интервал от 800 до 1200 мс." />
+                                    </TextBlock>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ── HOTKEY TAB ─────────────────────────────────────────── -->
+                <ScrollViewer Grid.Row="1" x:Name="HotkeyPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Padding="24,20" MaxWidth="600" HorizontalAlignment="Left">
+
+                        <TextBlock Text="ГЛОБАЛЬНАЯ ГОРЯЧАЯ КЛАВИША"
+                                   Style="{StaticResource SectionHeader}" />
+
+                        <TextBlock TextWrapping="Wrap"
+                                   FontSize="13"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Margin="0,0,0,20">
+                            Горячая клавиша запускает макрос из любого приложения.
+                            Если макрос уже запущен — останавливает его.
+                        </TextBlock>
+
+                        <CheckBox x:Name="HotkeyEnabledCheck"
+                                  Content="Включить горячую клавишу"
+                                  Style="{StaticResource DarkCheckBox}"
+                                  Checked="HotkeyField_Changed"
+                                  Unchecked="HotkeyField_Changed"
+                                  Margin="0,0,0,20" />
+
+                        <TextBlock Text="Модификаторы" Style="{StaticResource FieldLabel}" />
+                        <WrapPanel Margin="0,0,0,16">
+                            <CheckBox x:Name="HkCtrlCheck" Content="Ctrl"
+                                      Style="{StaticResource DarkCheckBox}"
+                                      Checked="HotkeyField_Changed" Unchecked="HotkeyField_Changed"
+                                      Margin="0,0,16,0" />
+                            <CheckBox x:Name="HkShiftCheck" Content="Shift"
+                                      Style="{StaticResource DarkCheckBox}"
+                                      Checked="HotkeyField_Changed" Unchecked="HotkeyField_Changed"
+                                      Margin="0,0,16,0" />
+                            <CheckBox x:Name="HkAltCheck" Content="Alt"
+                                      Style="{StaticResource DarkCheckBox}"
+                                      Checked="HotkeyField_Changed" Unchecked="HotkeyField_Changed" />
+                        </WrapPanel>
+
+                        <TextBlock Text="Клавиша (например F1, A, ESC)" Style="{StaticResource FieldLabel}" />
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="HkKeyBox"
+                                     Grid.Column="0"
+                                     Style="{StaticResource DarkTextBox}"
+                                     TextChanged="HotkeyField_Changed" />
+                            <Button Grid.Column="2"
+                                    Content="Применить"
+                                    Style="{StaticResource AccentButton}"
+                                    Click="ApplyHotkey_Click" />
+                        </Grid>
+
+                        <Border Background="{StaticResource SurfaceLightBrush}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="16,12">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Текущая горячая клавиша: "
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="14" />
+                                <TextBlock x:Name="HotkeyStatusText"
+                                           Text="Не задана"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           FontSize="14"
+                                           FontWeight="Bold" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Add steps quick-add buttons -->
+                        <Border Margin="0,24,0,0"
+                                Background="{StaticResource SurfaceBrush}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="16,12">
+                            <StackPanel>
+                                <TextBlock Text="БЫСТРОЕ ДОБАВЛЕНИЕ ШАГОВ"
+                                           Style="{StaticResource SectionHeader}" />
+                                <WrapPanel>
+                                    <Button Content="+ Нажатие клавиши"
+                                            Style="{StaticResource GhostButton}"
+                                            Tag="KeyPress"
+                                            Click="QuickAddStep_Click"
+                                            Margin="0,0,8,8" />
+                                    <Button Content="+ Задержка"
+                                            Style="{StaticResource GhostButton}"
+                                            Tag="Delay"
+                                            Click="QuickAddStep_Click"
+                                            Margin="0,0,8,8" />
+                                    <Button Content="+ Текст"
+                                            Style="{StaticResource GhostButton}"
+                                            Tag="TypeText"
+                                            Click="QuickAddStep_Click"
+                                            Margin="0,0,8,8" />
+                                    <Button Content="+ Клик"
+                                            Style="{StaticResource GhostButton}"
+                                            Tag="MouseClick"
+                                            Click="QuickAddStep_Click"
+                                            Margin="0,0,8,8" />
+                                    <Button Content="+ Движение"
+                                            Style="{StaticResource GhostButton}"
+                                            Tag="MouseMove"
+                                            Click="QuickAddStep_Click"
+                                            Margin="0,0,0,8" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+            </Grid>
+
+            <!-- ── Status bar ───────────────────────────────────────────────── -->
+            <Border Grid.Row="2"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Padding="16,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="StatusDot"
+                                 Width="8" Height="8"
+                                 Fill="{StaticResource TextMutedBrush}"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,8,0" />
+                        <TextBlock x:Name="StatusLabel"
+                                   Text="Готово"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1"
+                               x:Name="LogLabel"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="400" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+
+    <!-- Inline styles that reference named elements -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="App.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Tab button style -->
+            <Style x:Key="TabButton" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                <Setter Property="BorderThickness" Value="0,0,0,2" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="Padding" Value="16,10" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Macro item template (re-declare here since this ResourceDictionary takes precedence) -->
+            <DataTemplate x:Key="MacroItemTemplate">
+                <Border Padding="10,8" Margin="0,1"
+                        Background="Transparent"
+                        CornerRadius="4"
+                        Cursor="Hand">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="statusText"
+                                       FontSize="11"
+                                       Margin="0,2,0,0" />
+                        </StackPanel>
+                        <ToggleButton Grid.Column="1"
+                                      IsChecked="{Binding Enabled}"
+                                      Width="40" Height="22"
+                                      Cursor="Hand"
+                                      VerticalAlignment="Center"
+                                      Style="{StaticResource ToggleSwitch}" />
+                    </Grid>
+                </Border>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Enabled}" Value="True">
+                        <Setter TargetName="statusText" Property="Text" Value="Активен" />
+                        <Setter TargetName="statusText" Property="Foreground" Value="{StaticResource AccentBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Enabled}" Value="False">
+                        <Setter TargetName="statusText" Property="Text" Value="Отключён" />
+                        <Setter TargetName="statusText" Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+
+            <!-- Toggle Switch Style -->
+            <Style x:Key="ToggleSwitch" TargetType="ToggleButton">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToggleButton">
+                            <Border x:Name="track"
+                                    Width="40" Height="22"
+                                    CornerRadius="11"
+                                    Background="{StaticResource BorderBrush}">
+                                <Ellipse x:Name="thumb"
+                                         Width="16" Height="16"
+                                         Fill="White"
+                                         HorizontalAlignment="Left"
+                                         Margin="3,0,0,0" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="track" Property="Background" Value="{StaticResource AccentBrush}" />
+                                    <Setter TargetName="thumb" Property="HorizontalAlignment" Value="Right" />
+                                    <Setter TargetName="thumb" Property="Margin" Value="0,0,3,0" />
+                                    <Setter TargetName="thumb" Property="Fill" Value="#FF1A1A1A" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Step list item template -->
+            <DataTemplate x:Key="StepItemTemplate">
+                <Border Padding="10,8" Margin="0,2"
+                        Background="{StaticResource SurfaceLightBrush}"
+                        CornerRadius="6"
+                        Cursor="Hand">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding DisplayName}"
+                                   Foreground="{StaticResource TextBrush}"
+                                   FontSize="13"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <Border Grid.Column="1"
+                                Padding="6,2"
+                                CornerRadius="3"
+                                VerticalAlignment="Center"
+                                Margin="8,0,0,0"
+                                x:Name="typeBadge">
+                            <TextBlock x:Name="typeText" FontSize="11" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                </Border>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Type}" Value="KeyPress">
+                        <Setter TargetName="typeBadge" Property="Background" Value="#FF1A2A4A" />
+                        <Setter TargetName="typeText" Property="Text" Value="КЛАВИША" />
+                        <Setter TargetName="typeText" Property="Foreground" Value="#FF5599FF" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Type}" Value="Delay">
+                        <Setter TargetName="typeBadge" Property="Background" Value="#FF2A2A1A" />
+                        <Setter TargetName="typeText" Property="Text" Value="ПАУЗА" />
+                        <Setter TargetName="typeText" Property="Foreground" Value="#FFFFCC44" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Type}" Value="TypeText">
+                        <Setter TargetName="typeBadge" Property="Background" Value="#FF1A3A1A" />
+                        <Setter TargetName="typeText" Property="Text" Value="ТЕКСТ" />
+                        <Setter TargetName="typeText" Property="Foreground" Value="{StaticResource AccentBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Type}" Value="MouseClick">
+                        <Setter TargetName="typeBadge" Property="Background" Value="#FF2A1A3A" />
+                        <Setter TargetName="typeText" Property="Text" Value="КЛИК" />
+                        <Setter TargetName="typeText" Property="Foreground" Value="#FFBB66FF" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Type}" Value="MouseMove">
+                        <Setter TargetName="typeBadge" Property="Background" Value="#FF2A1A3A" />
+                        <Setter TargetName="typeText" Property="Text" Value="МЫШЬ" />
+                        <Setter TargetName="typeText" Property="Foreground" Value="#FFBB66FF" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+
+            <!-- Trigger list item template -->
+            <DataTemplate x:Key="TriggerItemTemplate">
+                <Border Padding="10,8" Margin="0,2"
+                        Background="{StaticResource SurfaceLightBrush}"
+                        CornerRadius="6"
+                        Cursor="Hand">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Name}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextBrush}" />
+                            <TextBlock FontSize="11"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Margin="0,2,0,0">
+                                <Run Text="Область: " />
+                                <Run Text="{Binding Region.DisplayString}" />
+                                <Run Text="  Порог: " />
+                                <Run Text="{Binding Threshold, StringFormat={}{0:F1}%}" />
+                            </TextBlock>
+                        </StackPanel>
+                        <ToggleButton Grid.Column="1"
+                                      IsChecked="{Binding Enabled}"
+                                      Width="40" Height="22"
+                                      Cursor="Hand"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </ResourceDictionary>
+    </Window.Resources>
+
+</Window>
