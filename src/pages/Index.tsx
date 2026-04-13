@@ -7,6 +7,8 @@ type TriggerAction = "hotkey" | "click";
 interface RepeatSettings {
   enabled: boolean;
   intervalMs: number;
+  jitter: boolean;
+  jitterMs: number;
   durationSec: number;
   maxCount: number;
   useCount: boolean;
@@ -52,6 +54,8 @@ interface Macro {
 const DEFAULT_REPEAT: RepeatSettings = {
   enabled: false,
   intervalMs: 1000,
+  jitter: false,
+  jitterMs: 300,
   durationSec: 60,
   maxCount: 10,
   useCount: false,
@@ -92,7 +96,7 @@ const initialMacros: Macro[] = [
         firedCount: 7,
       },
     ],
-    repeat: { enabled: true, intervalMs: 2000, durationSec: 300, maxCount: 50, useCount: false },
+    repeat: { enabled: true, intervalMs: 2000, jitter: true, jitterMs: 500, durationSec: 300, maxCount: 50, useCount: false },
     steps: [
       { id: "s4", type: "key", value: "Space" },
     ],
@@ -167,39 +171,59 @@ export default function Index() {
   const [repeatRunning, setRepeatRunning] = useState<string | null>(null);
   const [repeatCount, setRepeatCount] = useState(0);
   const [repeatSecondsLeft, setRepeatSecondsLeft] = useState(0);
-  const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [repeatNextIn, setRepeatNextIn] = useState(0);
+  const repeatIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const repeatTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const repeatStoppedRef = useRef(false);
 
   const stopRepeat = useCallback(() => {
-    if (repeatIntervalRef.current) clearInterval(repeatIntervalRef.current);
+    repeatStoppedRef.current = true;
+    if (repeatIntervalRef.current) clearTimeout(repeatIntervalRef.current);
     if (repeatTickRef.current) clearInterval(repeatTickRef.current);
     repeatIntervalRef.current = null;
     repeatTickRef.current = null;
     setRepeatRunning(null);
     setRepeatCount(0);
     setRepeatSecondsLeft(0);
+    setRepeatNextIn(0);
   }, []);
 
   const startRepeat = useCallback((macroId: string, settings: RepeatSettings) => {
     if (repeatRunning) { stopRepeat(); return; }
+    repeatStoppedRef.current = false;
     setRepeatRunning(macroId);
     setRepeatCount(0);
     setRepeatSecondsLeft(settings.durationSec);
 
     let count = 0;
-    const doRun = () => {
-      count += 1;
-      setRepeatCount(count);
-      setMacros((ms) => ms.map((m) => m.id === macroId ? { ...m, runCount: m.runCount + 1 } : m));
-      if (settings.useCount && count >= settings.maxCount) {
-        stopRepeat();
-      }
+
+    const getInterval = () => {
+      if (!settings.jitter) return settings.intervalMs;
+      const offset = Math.floor((Math.random() * 2 - 1) * settings.jitterMs);
+      return Math.max(100, settings.intervalMs + offset);
     };
 
-    doRun();
-    repeatIntervalRef.current = setInterval(() => {
-      doRun();
-    }, settings.intervalMs);
+    const schedule = () => {
+      if (repeatStoppedRef.current) return;
+      const delay = getInterval();
+      setRepeatNextIn(Math.round(delay / 100) / 10);
+      repeatIntervalRef.current = setTimeout(() => {
+        if (repeatStoppedRef.current) return;
+        count += 1;
+        setRepeatCount(count);
+        setMacros((ms) => ms.map((m) => m.id === macroId ? { ...m, runCount: m.runCount + 1 } : m));
+        if (settings.useCount && count >= settings.maxCount) {
+          stopRepeat();
+          return;
+        }
+        schedule();
+      }, delay);
+    };
+
+    count += 1;
+    setRepeatCount(1);
+    setMacros((ms) => ms.map((m) => m.id === macroId ? { ...m, runCount: m.runCount + 1 } : m));
+    schedule();
 
     if (!settings.useCount) {
       let sec = settings.durationSec;
@@ -931,6 +955,42 @@ export default function Index() {
                       <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
                         <span>0.1 сек</span><span>1 сек</span><span>10 сек</span>
                       </div>
+
+                      {/* Jitter */}
+                      <div className="mt-4 pt-4 border-t border-border">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Icon name="Shuffle" size={12} className="text-muted-foreground" />
+                            <span className="text-[10px] text-muted-foreground font-medium">Случайный разброс</span>
+                            <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">антибот</span>
+                          </div>
+                          <button
+                            onClick={() => updateRepeat(selected.id, { jitter: !selected.repeat.jitter })}
+                            className={`w-8 h-4 rounded-full transition-colors relative flex-shrink-0 ${selected.repeat.jitter ? "bg-primary" : "bg-muted"}`}
+                          >
+                            <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" style={{ left: selected.repeat.jitter ? "18px" : "2px" }} />
+                          </button>
+                        </div>
+                        {selected.repeat.jitter && (
+                          <div className="flex items-center gap-3 animate-fade-in">
+                            <span className="text-[11px] text-muted-foreground">±</span>
+                            <input
+                              type="number"
+                              min={50}
+                              max={5000}
+                              step={50}
+                              value={selected.repeat.jitterMs}
+                              onChange={(e) => updateRepeat(selected.id, { jitterMs: Number(e.target.value) })}
+                              className="w-20 h-8 bg-muted border border-border rounded-sm px-2 text-xs text-foreground outline-none focus:border-primary text-center"
+                              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                            />
+                            <span className="text-[11px] text-muted-foreground">мс</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              диапазон: {((selected.repeat.intervalMs - selected.repeat.jitterMs) / 1000).toFixed(1)} – {((selected.repeat.intervalMs + selected.repeat.jitterMs) / 1000).toFixed(1)} сек
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Stop condition */}
@@ -1017,6 +1077,11 @@ export default function Index() {
                           {selected.repeat.useCount && (
                             <span className="text-[11px] text-muted-foreground">
                               из <span className="text-foreground">{selected.repeat.maxCount}</span>
+                            </span>
+                          )}
+                          {selected.repeat.jitter && (
+                            <span className="text-[11px] text-muted-foreground">
+                              след: <span className="text-yellow-400">{repeatNextIn} сек</span>
                             </span>
                           )}
                         </div>
