@@ -4,6 +4,14 @@ import Icon from "@/components/ui/icon";
 type StepType = "key" | "delay" | "text";
 type TriggerAction = "hotkey" | "click";
 
+interface RepeatSettings {
+  enabled: boolean;
+  intervalMs: number;
+  durationSec: number;
+  maxCount: number;
+  useCount: boolean;
+}
+
 interface Step {
   id: string;
   type: StepType;
@@ -38,7 +46,16 @@ interface Macro {
   steps: Step[];
   runCount: number;
   triggers: VisualTrigger[];
+  repeat: RepeatSettings;
 }
+
+const DEFAULT_REPEAT: RepeatSettings = {
+  enabled: false,
+  intervalMs: 1000,
+  durationSec: 60,
+  maxCount: 10,
+  useCount: false,
+};
 
 const initialMacros: Macro[] = [
   {
@@ -48,6 +65,7 @@ const initialMacros: Macro[] = [
     enabled: true,
     runCount: 42,
     triggers: [],
+    repeat: { ...DEFAULT_REPEAT },
     steps: [
       { id: "s1", type: "key", value: "Ctrl+S" },
       { id: "s2", type: "delay", value: "500" },
@@ -74,6 +92,7 @@ const initialMacros: Macro[] = [
         firedCount: 7,
       },
     ],
+    repeat: { enabled: true, intervalMs: 2000, durationSec: 300, maxCount: 50, useCount: false },
     steps: [
       { id: "s4", type: "key", value: "Space" },
     ],
@@ -85,6 +104,7 @@ const initialMacros: Macro[] = [
     enabled: false,
     runCount: 5,
     triggers: [],
+    repeat: { ...DEFAULT_REPEAT },
     steps: [
       { id: "s8", type: "key", value: "PrintScreen" },
     ],
@@ -111,7 +131,7 @@ function generateId() {
   return Math.random().toString(36).slice(2, 9);
 }
 
-type Tab = "steps" | "triggers";
+type Tab = "steps" | "triggers" | "repeat";
 
 export default function Index() {
   const [macros, setMacros] = useState<Macro[]>(initialMacros);
@@ -143,6 +163,62 @@ export default function Index() {
   // Fired flash
   const [firedTrigger, setFiredTrigger] = useState<string | null>(null);
 
+  // Repeat timer state
+  const [repeatRunning, setRepeatRunning] = useState<string | null>(null);
+  const [repeatCount, setRepeatCount] = useState(0);
+  const [repeatSecondsLeft, setRepeatSecondsLeft] = useState(0);
+  const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const repeatTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopRepeat = useCallback(() => {
+    if (repeatIntervalRef.current) clearInterval(repeatIntervalRef.current);
+    if (repeatTickRef.current) clearInterval(repeatTickRef.current);
+    repeatIntervalRef.current = null;
+    repeatTickRef.current = null;
+    setRepeatRunning(null);
+    setRepeatCount(0);
+    setRepeatSecondsLeft(0);
+  }, []);
+
+  const startRepeat = useCallback((macroId: string, settings: RepeatSettings) => {
+    if (repeatRunning) { stopRepeat(); return; }
+    setRepeatRunning(macroId);
+    setRepeatCount(0);
+    setRepeatSecondsLeft(settings.durationSec);
+
+    let count = 0;
+    const doRun = () => {
+      count += 1;
+      setRepeatCount(count);
+      setMacros((ms) => ms.map((m) => m.id === macroId ? { ...m, runCount: m.runCount + 1 } : m));
+      if (settings.useCount && count >= settings.maxCount) {
+        stopRepeat();
+      }
+    };
+
+    doRun();
+    repeatIntervalRef.current = setInterval(() => {
+      doRun();
+    }, settings.intervalMs);
+
+    if (!settings.useCount) {
+      let sec = settings.durationSec;
+      repeatTickRef.current = setInterval(() => {
+        sec -= 1;
+        setRepeatSecondsLeft(sec);
+        if (sec <= 0) stopRepeat();
+      }, 1000);
+    }
+  }, [repeatRunning, stopRepeat]);
+
+  useEffect(() => () => stopRepeat(), [stopRepeat]);
+
+  const updateRepeat = useCallback((macroId: string, patch: Partial<RepeatSettings>) => {
+    setMacros((ms) =>
+      ms.map((m) => m.id === macroId ? { ...m, repeat: { ...m.repeat, ...patch } } : m)
+    );
+  }, []);
+
   const selected = macros.find((m) => m.id === selectedId) ?? null;
 
   const updateMacro = useCallback((id: string, patch: Partial<Macro>) => {
@@ -163,7 +239,7 @@ export default function Index() {
     const id = generateId();
     setMacros((ms) => [
       ...ms,
-      { id, name: "Новый макрос", hotkey: "", enabled: true, runCount: 0, steps: [], triggers: [] },
+      { id, name: "Новый макрос", hotkey: "", enabled: true, runCount: 0, steps: [], triggers: [], repeat: { ...DEFAULT_REPEAT } },
     ]);
     setSelectedId(id);
     setActiveTab("steps");
@@ -478,19 +554,26 @@ export default function Index() {
 
           {/* Tabs */}
           <div className="flex border-b border-border px-8 flex-shrink-0">
-            {(["steps", "triggers"] as Tab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex items-center gap-2 px-1 py-3 mr-6 text-xs font-medium border-b-2 transition-all ${activeTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-              >
-                <Icon name={tab === "steps" ? "ListOrdered" : "Eye"} size={13} />
-                {tab === "steps" ? "Шаги" : "Триггеры"}
-                {tab === "triggers" && selected.triggers.length > 0 && (
-                  <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">{selected.triggers.length}</span>
-                )}
-              </button>
-            ))}
+            {(["steps", "triggers", "repeat"] as Tab[]).map((tab) => {
+              const labels: Record<Tab, string> = { steps: "Шаги", triggers: "Триггеры", repeat: "Повтор" };
+              const icons: Record<Tab, string> = { steps: "ListOrdered", triggers: "Eye", repeat: "RefreshCw" };
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex items-center gap-2 px-1 py-3 mr-6 text-xs font-medium border-b-2 transition-all ${activeTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Icon name={icons[tab]} size={13} />
+                  {labels[tab]}
+                  {tab === "triggers" && selected.triggers.length > 0 && (
+                    <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">{selected.triggers.length}</span>
+                  )}
+                  {tab === "repeat" && selected.repeat.enabled && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex-1 overflow-y-auto">
@@ -794,6 +877,152 @@ export default function Index() {
                       ))}
                     </div>
                   )}
+                </>
+              )}
+
+              {/* ── REPEAT TAB ── */}
+              {activeTab === "repeat" && (
+                <>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground mb-0.5">Повтор по таймеру</h2>
+                      <p className="text-[11px] text-muted-foreground">Макрос будет выполняться автоматически через заданный интервал</p>
+                    </div>
+                    <button
+                      onClick={() => updateRepeat(selected.id, { enabled: !selected.repeat.enabled })}
+                      className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-sm border transition-all ${selected.repeat.enabled ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${selected.repeat.enabled ? "bg-primary" : "bg-muted-foreground"}`} />
+                      {selected.repeat.enabled ? "Включён" : "Выключен"}
+                    </button>
+                  </div>
+
+                  <div className={`space-y-5 transition-opacity ${selected.repeat.enabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+
+                    {/* Interval */}
+                    <div className="rounded-sm border border-border p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Icon name="Timer" size={13} className="text-muted-foreground" />
+                          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">Интервал</span>
+                        </div>
+                        <div className="flex items-center gap-1.5" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                          <input
+                            type="number"
+                            min={100}
+                            max={60000}
+                            value={selected.repeat.intervalMs}
+                            onChange={(e) => updateRepeat(selected.id, { intervalMs: Number(e.target.value) })}
+                            className="w-20 h-8 bg-muted border border-border rounded-sm px-2 text-xs text-foreground outline-none focus:border-primary text-center"
+                          />
+                          <span className="text-[11px] text-muted-foreground">мс</span>
+                          <span className="text-[10px] text-muted-foreground ml-1">= {(selected.repeat.intervalMs / 1000).toFixed(1)} сек</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min={100}
+                        max={10000}
+                        step={100}
+                        value={selected.repeat.intervalMs}
+                        onChange={(e) => updateRepeat(selected.id, { intervalMs: Number(e.target.value) })}
+                        className="w-full accent-primary h-1"
+                      />
+                      <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
+                        <span>0.1 сек</span><span>1 сек</span><span>10 сек</span>
+                      </div>
+                    </div>
+
+                    {/* Stop condition */}
+                    <div className="rounded-sm border border-border p-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Icon name="Square" size={13} className="text-muted-foreground" />
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">Условие остановки</span>
+                      </div>
+                      <div className="flex gap-2 mb-4">
+                        <button
+                          onClick={() => updateRepeat(selected.id, { useCount: false })}
+                          className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-sm border transition-all ${!selected.repeat.useCount ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}
+                        >
+                          <Icon name="Clock" size={12} />
+                          По времени
+                        </button>
+                        <button
+                          onClick={() => updateRepeat(selected.id, { useCount: true })}
+                          className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-sm border transition-all ${selected.repeat.useCount ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}
+                        >
+                          <Icon name="Hash" size={12} />
+                          По количеству
+                        </button>
+                      </div>
+
+                      {!selected.repeat.useCount ? (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[11px] text-muted-foreground w-28">Длительность</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={selected.repeat.durationSec}
+                            onChange={(e) => updateRepeat(selected.id, { durationSec: Number(e.target.value) })}
+                            className="w-20 h-8 bg-muted border border-border rounded-sm px-2 text-xs text-foreground outline-none focus:border-primary text-center"
+                            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                          />
+                          <span className="text-[11px] text-muted-foreground">сек</span>
+                          <span className="text-[10px] text-muted-foreground">≈ {Math.floor(selected.repeat.durationSec * 1000 / selected.repeat.intervalMs)} запусков</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[11px] text-muted-foreground w-28">Количество раз</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={selected.repeat.maxCount}
+                            onChange={(e) => updateRepeat(selected.id, { maxCount: Number(e.target.value) })}
+                            className="w-20 h-8 bg-muted border border-border rounded-sm px-2 text-xs text-foreground outline-none focus:border-primary text-center"
+                            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                          />
+                          <span className="text-[11px] text-muted-foreground">раз</span>
+                          <span className="text-[10px] text-muted-foreground">≈ {((selected.repeat.maxCount * selected.repeat.intervalMs) / 1000).toFixed(0)} сек</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Run / Stop */}
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => repeatRunning === selected.id ? stopRepeat() : startRepeat(selected.id, selected.repeat)}
+                        className={`flex items-center gap-2 text-sm px-6 py-2.5 rounded-sm font-medium transition-all ${repeatRunning === selected.id ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}
+                      >
+                        {repeatRunning === selected.id ? (
+                          <><Icon name="Square" size={14} />Остановить</>
+                        ) : (
+                          <><Icon name="Play" size={14} />Запустить повтор</>
+                        )}
+                      </button>
+
+                      {repeatRunning === selected.id && (
+                        <div className="flex items-center gap-4 animate-fade-in" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-primary blink" />
+                            <span className="text-xs text-primary font-medium">АКТИВЕН</span>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground">
+                            запусков: <span className="text-foreground">{repeatCount}</span>
+                          </span>
+                          {!selected.repeat.useCount && (
+                            <span className="text-[11px] text-muted-foreground">
+                              осталось: <span className="text-foreground">{repeatSecondsLeft} сек</span>
+                            </span>
+                          )}
+                          {selected.repeat.useCount && (
+                            <span className="text-[11px] text-muted-foreground">
+                              из <span className="text-foreground">{selected.repeat.maxCount}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </>
               )}
 
